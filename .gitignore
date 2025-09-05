@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.github/instructions/better-auth-usage-instructions.instructions.md
+.github/instructions/nextjs-general-instructions.instructions.md
+
+/src/generated/prisma
+IMPLEMENTATION.md
+.github/instructions/overview.instructions.md
