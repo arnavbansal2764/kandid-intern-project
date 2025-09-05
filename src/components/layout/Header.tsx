@@ -91,7 +91,7 @@ export function Header({ title, subtitle, actions, onMobileMenuClick }: HeaderPr
                   const isLast = index === breadcrumbs.length - 1;
                   
                   return (
-                    <li key={breadcrumb.href || breadcrumb.label} className="flex items-center">
+                    <li key={`${index}-${breadcrumb.label}`} className="flex items-center">
                       {index > 0 && (
                         <ChevronRightIcon className="flex-shrink-0 h-4 w-4 text-gray-400 mx-2" />
                       )}

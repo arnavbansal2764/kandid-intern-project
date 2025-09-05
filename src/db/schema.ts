@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -53,6 +53,66 @@ export const verification = pgTable("verification", {
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const campaigns = pgTable("campaigns", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status", { enum: ["draft", "active", "paused", "completed"] }).default("draft").notNull(),
+  totalLeads: integer("total_leads").default(0).notNull(),
+  successfulLeads: integer("successful_leads").default(0).notNull(),
+  responseRate: integer("response_rate").default(0).notNull(), // stored as percentage * 100
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const leads = pgTable("leads", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  company: text("company"),
+  position: text("position"),
+  phone: text("phone"),
+  linkedinUrl: text("linkedin_url"),
+  status: text("status", { enum: ["pending", "contacted", "responded", "converted", "rejected"] }).default("pending").notNull(),
+  notes: text("notes"),
+  lastContactDate: timestamp("last_contact_date"),
+  campaignId: text("campaign_id")
+    .notNull()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const leadInteractions = pgTable("lead_interactions", {
+  id: text("id").primaryKey(),
+  leadId: text("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["email", "call", "meeting", "note"] }).notNull(),
+  subject: text("subject"),
+  content: text("content"),
+  outcome: text("outcome"),
+  scheduledAt: timestamp("scheduled_at"),
+  completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
