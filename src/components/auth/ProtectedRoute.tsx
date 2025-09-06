@@ -10,22 +10,15 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, fallback }: ProtectedRouteProps) {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isPending && !session) {
+    if (!session) {
       router.push("/auth");
     }
-  }, [session, isPending, router]);
+  }, [session,router]);
 
-  if (isPending) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   if (!session) {
     return fallback || (
