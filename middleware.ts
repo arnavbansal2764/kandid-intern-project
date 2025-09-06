@@ -4,7 +4,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Define protected routes
-  const protectedRoutes = ['/dashboard'];
+  const protectedRoutes = ['/dashboard', '/leads', '/campaigns', '/settings'];
   
   // Check if the current path is protected
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -12,13 +12,28 @@ export function middleware(request: NextRequest) {
   );
   
   if (isProtectedRoute) {
-    // Check for session cookie
-    const sessionCookie = request.cookies.get('better-auth.session_token');
+    // Check for session cookie (better-auth uses this cookie name)
+    const sessionCookie = request.cookies.get('better-auth.session_token') || 
+                         request.cookies.get('session_token') ||
+                         request.cookies.get('better-auth.session');
     
     if (!sessionCookie) {
-      // Redirect to auth page if no session
+      // Redirect to auth page if no session, preserving the intended destination
       const url = new URL('/auth', request.url);
+      url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
+    }
+  }
+  
+  // If user is already authenticated and visits auth page, redirect to dashboard
+  if (pathname === '/auth') {
+    const sessionCookie = request.cookies.get('better-auth.session_token') || 
+                         request.cookies.get('session_token') ||
+                         request.cookies.get('better-auth.session');
+    
+    if (sessionCookie) {
+      const redirectTo = request.nextUrl.searchParams.get('redirect') || '/dashboard';
+      return NextResponse.redirect(new URL(redirectTo, request.url));
     }
   }
   

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,6 +17,7 @@ export function SignInForm({ onToggleForm }: SignInFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +33,13 @@ export function SignInForm({ onToggleForm }: SignInFormProps) {
       if (result.error) {
         setError(result.error.message || "Failed to sign in");
       } else {
-        // Redirect to dashboard or home page
-        window.location.href = "/dashboard";
+        // Check for redirect parameter in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectTo = urlParams.get('redirect') || '/dashboard';
+        
+        // Use Next.js router for navigation
+        router.push(redirectTo);
+        router.refresh();
       }
     } catch (err) {
       setError("An unexpected error occurred");
@@ -46,9 +53,13 @@ export function SignInForm({ onToggleForm }: SignInFormProps) {
     setError("");
 
     try {
+      // Check for redirect parameter in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectTo = urlParams.get('redirect') || '/dashboard';
+      
       await signIn.social({
         provider: "google",
-        callbackURL: "/dashboard",
+        callbackURL: `${window.location.origin}${redirectTo}`,
       });
     } catch (err) {
       setError("Failed to sign in with Google");

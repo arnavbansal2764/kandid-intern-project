@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -18,6 +19,7 @@ export function SignUpForm({ onToggleForm }: SignUpFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   const validateForm = () => {
     if (!name.trim()) {
@@ -61,9 +63,14 @@ export function SignUpForm({ onToggleForm }: SignUpFormProps) {
         setError(result.error.message || "Failed to create account");
       } else {
         setSuccess(true);
-        // Redirect to dashboard after successful signup
+        // Check for redirect parameter in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectTo = urlParams.get('redirect') || '/dashboard';
+        
+        // Use Next.js router for navigation after successful signup
         setTimeout(() => {
-          window.location.href = "/dashboard";
+          router.push(redirectTo);
+          router.refresh();
         }, 1500);
       }
     } catch (err) {
