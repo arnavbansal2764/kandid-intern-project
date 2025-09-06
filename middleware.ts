@@ -3,22 +3,35 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Define protected routes
-  const protectedRoutes = ['/dashboard','/leads','/campaigns'];
+  // For debugging purposes, let's be less aggressive with middleware
+  // and primarily rely on client-side protection for now
+  
+  // Only handle specific cases in middleware
+  
+  // If user is on auth page and has any potential session cookie, redirect to dashboard
+  if (pathname === '/auth') {
+    // Check for various possible session cookie names that Better Auth might use
+    const possibleCookieNames = [
+      'better-auth.session_token',
+      'better-auth.session',
+      'session_token',
+      'session',
+      'auth.session_token',
+      'auth-token'
+    ];
 
-  // Check if the current path is protected
-  const isProtectedRoute = protectedRoutes.some(route =>
-    pathname.startsWith(route)
-  );
+    let hasValidSession = false;
 
-  if (isProtectedRoute) {
-    // Check for session cookie
-    const sessionCookie = request.cookies.get('better-auth.session_token');
+    for (const cookieName of possibleCookieNames) {
+      const cookie = request.cookies.get(cookieName);
+      if (cookie && cookie.value && cookie.value.length > 10) { // Basic validation
+        hasValidSession = true;
+        break;
+      }
+    }
 
-    if (!sessionCookie) {
-      // Redirect to auth page if no session
-      const url = new URL('/auth', request.url);
-      return NextResponse.redirect(url);
+    if (hasValidSession) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
 

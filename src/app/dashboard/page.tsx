@@ -1,6 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { SessionDebug } from "@/components/auth/SessionDebug";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/Button";
 import { useSession } from "@/lib/auth-client";
@@ -18,6 +19,7 @@ export default function DashboardPage() {
         }
       >
         <DashboardContent />
+        <SessionDebug />
       </AppLayout>
     </ProtectedRoute>
   );

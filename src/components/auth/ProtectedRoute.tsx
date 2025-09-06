@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface ProtectedRouteProps {
@@ -10,16 +10,32 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, fallback }: ProtectedRouteProps) {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (!session) {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    // Only redirect if we're not pending and there's no session
+    if (isClient && !isPending && !session) {
+      console.log("ProtectedRoute: No session found, redirecting to auth");
       router.push("/auth");
     }
-  }, [session,router]);
+  }, [session, isPending, router, isClient]);
 
+  // Show loading spinner while checking session or on server
+  if (!isClient || isPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
+  // Show access denied if no session after loading
   if (!session) {
     return fallback || (
       <div className="min-h-screen flex items-center justify-center">
@@ -31,5 +47,6 @@ export function ProtectedRoute({ children, fallback }: ProtectedRouteProps) {
     );
   }
 
+  // Render children if authenticated
   return <>{children}</>;
 }
