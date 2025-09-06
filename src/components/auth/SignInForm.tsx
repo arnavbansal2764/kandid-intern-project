@@ -37,9 +37,8 @@ export function SignInForm({ onToggleForm }: SignInFormProps) {
         const urlParams = new URLSearchParams(window.location.search);
         const redirectTo = urlParams.get('redirect') || '/dashboard';
         
-        // Use Next.js router for navigation
-        router.push(redirectTo);
-        router.refresh();
+        // Force a hard navigation to ensure the auth state is properly updated
+        window.location.href = redirectTo;
       }
     } catch (err) {
       setError("An unexpected error occurred");
@@ -57,9 +56,12 @@ export function SignInForm({ onToggleForm }: SignInFormProps) {
       const urlParams = new URLSearchParams(window.location.search);
       const redirectTo = urlParams.get('redirect') || '/dashboard';
       
+      // Use the current origin to build the callback URL
+      const baseUrl = window.location.origin;
+      
       await signIn.social({
         provider: "google",
-        callbackURL: `${window.location.origin}${redirectTo}`,
+        callbackURL: `${baseUrl}${redirectTo}`,
       });
     } catch (err) {
       setError("Failed to sign in with Google");

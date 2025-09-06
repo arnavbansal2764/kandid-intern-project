@@ -67,10 +67,9 @@ export function SignUpForm({ onToggleForm }: SignUpFormProps) {
         const urlParams = new URLSearchParams(window.location.search);
         const redirectTo = urlParams.get('redirect') || '/dashboard';
         
-        // Use Next.js router for navigation after successful signup
+        // Use hard navigation to ensure auth state is updated
         setTimeout(() => {
-          router.push(redirectTo);
-          router.refresh();
+          window.location.href = redirectTo;
         }, 1500);
       }
     } catch (err) {
