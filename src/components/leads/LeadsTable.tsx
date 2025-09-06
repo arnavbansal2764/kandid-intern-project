@@ -1,33 +1,9 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useLeads } from "@/hooks/useLeads";
 import { useLeadsStore } from "@/stores/leadsStore";
 import { useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
-
-interface Lead {
-  id: string;
-  name: string;
-  email: string;
-  company: string;
-  position?: string;
-  phone?: string;
-  status: "pending" | "contacted" | "responded" | "converted" | "rejected";
-  lastContactDate?: Date | null;
-  campaignName: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface LeadsResponse {
-  leads: Lead[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    hasMore: boolean;
-  };
-}
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -45,36 +21,38 @@ const statusLabels = {
   rejected: "Rejected",
 };
 
-async function fetchLeads({
-  pageParam = 1,
-  search,
-  status,
-  campaign,
-  sortBy,
-  sortOrder,
-}: {
-  pageParam?: number;
-  search: string;
-  status: string;
-  campaign: string;
-  sortBy: string;
-  sortOrder: string;
-}): Promise<LeadsResponse> {
-  const params = new URLSearchParams({
-    page: pageParam.toString(),
-    limit: "20",
-    ...(search && { search }),
-    ...(status && { status }),
-    ...(campaign && { campaign }),
-    sortBy,
-    sortOrder,
-  });
-
-  const response = await fetch(`/api/leads?${params}`);
-  if (!response.ok) {
-    throw new Error("Failed to fetch leads");
-  }
-  return response.json();
+function LoadingSkeleton() {
+  return (
+    <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+      <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+        <div className="h-4 bg-gray-300 rounded w-1/4 animate-pulse"></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              {[...Array(7)].map((_, i) => (
+                <th key={i} className="px-6 py-3">
+                  <div className="h-3 bg-gray-300 rounded animate-pulse"></div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {[...Array(10)].map((_, i) => (
+              <tr key={i}>
+                {[...Array(7)].map((_, j) => (
+                  <td key={j} className="px-6 py-4">
+                    <div className="h-4 bg-gray-300 rounded animate-pulse"></div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 export function LeadsTable() {
@@ -88,45 +66,80 @@ export function LeadsTable() {
   } = useLeadsStore();
 
   const {
-    data,
+    allLeads,
+    totalCount,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     isLoading,
     isError,
     error,
-  } = useInfiniteQuery({
-    queryKey: ["leads", searchQuery, statusFilter, campaignFilter, sortBy, sortOrder],
-    queryFn: ({ pageParam }) =>
-      fetchLeads({
-        pageParam,
-        search: searchQuery,
-        status: statusFilter,
-        campaign: campaignFilter,
-        sortBy,
-        sortOrder,
-      }),
-    getNextPageParam: (lastPage) =>
-      lastPage.pagination.hasMore ? lastPage.pagination.page + 1 : undefined,
-    initialPageParam: 1,
+    updateLead,
+    deleteLead,
+    isUpdating,
+    isDeleting,
+    updateError,
+    deleteError,
+    refetch,
+  } = useLeads({
+    search: searchQuery,
+    status: statusFilter,
+    campaign: campaignFilter,
+    sortBy,
+    sortOrder,
   });
 
+  // Enhanced intersection observer for infinite scrolling
   const observerRef = useRef<IntersectionObserver | null>(null);
   const lastLeadElementRef = useCallback(
     (node: HTMLTableRowElement) => {
       if (isFetchingNextPage) return;
       if (observerRef.current) observerRef.current.disconnect();
-      observerRef.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasNextPage) {
-          fetchNextPage();
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasNextPage && !isLoading) {
+            fetchNextPage();
+          }
+        },
+        {
+          rootMargin: "100px", // Load more content 100px before reaching the end
+          threshold: 0.1,
         }
-      });
+      );
       if (node) observerRef.current.observe(node);
     },
-    [isFetchingNextPage, hasNextPage, fetchNextPage]
+    [isFetchingNextPage, hasNextPage, fetchNextPage, isLoading]
   );
 
-  const allLeads = data?.pages.flatMap((page) => page.leads) ?? [];
+  // Cleanup observer on unmount
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Handle status update with optimistic updates
+  const handleStatusUpdate = useCallback(
+    (leadId: string, newStatus: string) => {
+      updateLead({
+        id: leadId,
+        updates: { status: newStatus as any },
+      });
+    },
+    [updateLead]
+  );
+
+  // Handle lead deletion
+  const handleDeleteLead = useCallback(
+    (leadId: string) => {
+      if (window.confirm("Are you sure you want to delete this lead?")) {
+        deleteLead(leadId);
+      }
+    },
+    [deleteLead]
+  );
 
   if (isLoading) {
     return <LoadingSkeleton />;
@@ -138,7 +151,22 @@ export function LeadsTable() {
         <div className="text-red-600 mb-4">
           Error loading leads: {error?.message}
         </div>
-        <Button onClick={() => window.location.reload()}>Try Again</Button>
+        <div className="space-x-4">
+          <Button onClick={() => refetch()}>Retry</Button>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Refresh Page
+          </Button>
+        </div>
+        {updateError && (
+          <div className="text-red-500 text-sm mt-2">
+            Update error: {updateError.message}
+          </div>
+        )}
+        {deleteError && (
+          <div className="text-red-500 text-sm mt-2">
+            Delete error: {deleteError.message}
+          </div>
+        )}
       </div>
     );
   }
@@ -147,15 +175,34 @@ export function LeadsTable() {
     return (
       <div className="text-center py-12">
         <div className="text-gray-500 mb-4">No leads found</div>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-gray-400 mb-4">
           Try adjusting your search or filter criteria
         </p>
+        <Button onClick={() => refetch()}>Refresh</Button>
       </div>
     );
   }
 
   return (
     <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+      {/* Results summary */}
+      <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+        <p className="text-sm text-gray-600">
+          Showing {allLeads.length} of {totalCount} leads
+          {hasNextPage && (
+            <span className="ml-2 text-blue-600">
+              (Loading more as you scroll...)
+            </span>
+          )}
+        </p>
+        {(isUpdating || isDeleting) && (
+          <p className="text-xs text-blue-600 mt-1">
+            {isUpdating && "Updating lead..."}
+            {isDeleting && "Deleting lead..."}
+          </p>
+        )}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -178,6 +225,9 @@ export function LeadsTable() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Last Contact
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -187,10 +237,12 @@ export function LeadsTable() {
                 <tr
                   key={lead.id}
                   ref={isLast ? lastLeadElementRef : undefined}
-                  onClick={() => openLeadSheet(lead.id)}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="hover:bg-gray-50 transition-colors"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                    onClick={() => openLeadSheet(lead.id)}
+                  >
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium text-sm">
@@ -209,30 +261,66 @@ export function LeadsTable() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                    onClick={() => openLeadSheet(lead.id)}
+                  >
                     <div className="text-sm text-gray-900">{lead.email}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{lead.company}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                    onClick={() => openLeadSheet(lead.id)}
+                  >
                     <div className="text-sm text-gray-900">
-                      {lead.campaignName}
+                      {lead.company || "—"}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        statusColors[lead.status]
-                      }`}
-                    >
-                      {statusLabels[lead.status]}
-                    </span>
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                    onClick={() => openLeadSheet(lead.id)}
+                  >
+                    <div className="text-sm text-gray-900">{lead.campaignName}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <select
+                      value={lead.status}
+                      onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border-0 ${
+                        statusColors[lead.status]
+                      } cursor-pointer`}
+                      disabled={isUpdating}
+                    >
+                      {Object.entries(statusLabels).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 cursor-pointer"
+                    onClick={() => openLeadSheet(lead.id)}
+                  >
                     {lead.lastContactDate
                       ? new Date(lead.lastContactDate).toLocaleDateString()
                       : "Never"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => openLeadSheet(lead.id)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLead(lead.id)}
+                        disabled={isDeleting}
+                        className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -241,88 +329,27 @@ export function LeadsTable() {
         </table>
       </div>
 
+      {/* Loading indicator for infinite scroll */}
       {isFetchingNextPage && (
-        <div className="px-6 py-4 border-t border-gray-200">
-          <LoadingRow />
+        <div className="text-center py-4 border-t border-gray-200">
+          <div className="inline-flex items-center text-sm text-gray-500">
+            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading more leads...
+          </div>
         </div>
       )}
 
+      {/* End of results indicator */}
       {!hasNextPage && allLeads.length > 0 && (
-        <div className="px-6 py-4 border-t border-gray-200 text-center text-sm text-gray-500">
-          No more leads to load
+        <div className="text-center py-4 border-t border-gray-200">
+          <p className="text-sm text-gray-500">
+            You've reached the end of the list
+          </p>
         </div>
       )}
     </div>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Lead Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Campaign
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Contact
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {Array.from({ length: 10 }).map((_, index) => (
-              <LoadingRow key={index} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function LoadingRow() {
-  return (
-    <tr className="animate-pulse">
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-10 w-10">
-            <div className="h-10 w-10 bg-gray-300 rounded-full"></div>
-          </div>
-          <div className="ml-4">
-            <div className="h-4 bg-gray-300 rounded w-24 mb-2"></div>
-            <div className="h-3 bg-gray-300 rounded w-16"></div>
-          </div>
-        </div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 bg-gray-300 rounded w-32"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 bg-gray-300 rounded w-28"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 bg-gray-300 rounded w-24"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-6 bg-gray-300 rounded-full w-16"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 bg-gray-300 rounded w-20"></div>
-      </td>
-    </tr>
   );
 }

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
-import { campaigns } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { campaigns, leads } from "@/db/schema";
+import { eq, count, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,21 +16,50 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch campaigns for the authenticated user
+    // First, get campaigns
     const userCampaigns = await db
-      .select({
-        id: campaigns.id,
-        name: campaigns.name,
-        status: campaigns.status,
-        totalLeads: campaigns.totalLeads,
-        successfulLeads: campaigns.successfulLeads,
-        responseRate: campaigns.responseRate,
-      })
+      .select()
       .from(campaigns)
       .where(eq(campaigns.userId, session.user.id))
       .orderBy(campaigns.createdAt);
 
-    return NextResponse.json({ campaigns: userCampaigns });
+    // Then get lead counts for each campaign
+    const campaignsWithCounts = await Promise.all(
+      userCampaigns.map(async (campaign) => {
+        // Get total leads count
+        const [totalLeadsResult] = await db
+          .select({ count: count() })
+          .from(leads)
+          .where(eq(leads.campaignId, campaign.id));
+
+        // Get successful leads count (converted or responded)
+        const [successfulLeadsResult] = await db
+          .select({ count: count() })
+          .from(leads)
+          .where(
+            sql`${leads.campaignId} = ${campaign.id} AND ${leads.status} IN ('converted', 'responded')`
+          );
+
+        const totalLeads = totalLeadsResult?.count || 0;
+        const successfulLeads = successfulLeadsResult?.count || 0;
+        const responseRate = totalLeads > 0 ? Math.round((successfulLeads / totalLeads) * 100) : 0;
+
+        return {
+          id: campaign.id,
+          name: campaign.name,
+          description: campaign.description,
+          status: campaign.status,
+          totalLeads,
+          successfulLeads,
+          responseRate,
+          progressPercentage: responseRate,
+          createdAt: campaign.createdAt,
+          updatedAt: campaign.updatedAt,
+        };
+      })
+    );
+
+    return NextResponse.json({ campaigns: campaignsWithCounts });
   } catch (error) {
     console.error("Error fetching campaigns:", error);
     return NextResponse.json(
