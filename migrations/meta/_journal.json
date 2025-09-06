@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1757005192650,
-      "tag": "0000_married_firebrand",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1757007640265,
-      "tag": "0001_hot_brother_voodoo",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1757054653839,
-      "tag": "0002_shallow_baron_zemo",
+      "when": 1757139545440,
+      "tag": "0000_clear_kulan_gath",
       "breakpoints": true
     }
   ]
